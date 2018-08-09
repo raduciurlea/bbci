@@ -2,4 +2,4 @@ steps:
 - name: 'debian'
   args: ['ls']
 - name: 'debian'
-  args: ['cal']
+  args: ['ls', '-la']
