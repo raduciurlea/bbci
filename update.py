@@ -29,6 +29,7 @@ def post_status(commit, status, config):
 
 # post_status('645816c785e4b5ec1dd35237f10632f36e3e5405', build_status, config)
 
+
 STATES = {
     'WORKING': 'INPROGRESS',
     'SUCCESS': 'SUCCESSFUL',
