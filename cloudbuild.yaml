@@ -1,3 +1,5 @@
 steps:
 - name: 'debian'
   args: ['ls']
+- name: 'debian'
+  args: ['cal']
