@@ -1,14 +1,15 @@
+import base64
 import json
 import os
 import requests
-from pprint import pprint
+from dateutil.parser import parse
 
-config = {
-    'owner': os.environ['BB_OWNER'],
-    'repo': os.environ['BB_REPO'],
-    'user': os.environ['BB_USER'],
-    'pass': os.environ['BB_PASS'],
-}
+# config = {
+#     'owner': os.environ['BB_OWNER'],
+#     'repo': os.environ['BB_REPO'],
+#     'user': os.environ['BB_USER'],
+#     'pass': os.environ['BB_PASS'],
+# }
 
 
 def make_status(url, description, state):
@@ -28,18 +29,37 @@ def post_status(commit, status, config):
 
 # post_status('645816c785e4b5ec1dd35237f10632f36e3e5405', build_status, config)
 
-msg_queued = '''
-{"id":"83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471","projectId":"c4-order-management","status":"QUEUED","source":{"repoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","branchName":"master"}},"steps":[{"name":"debian","args":["ls"]},{"name":"debian","args":["cal"]}],"createTime":"2018-08-09T11:21:12.597253221Z","timeout":"600s","logsBucket":"gs://657212652564.cloudbuild-logs.googleusercontent.com","sourceProvenance":{"resolvedRepoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","commitSha":"fb92e1d38809676b71a677dfef4d953e639106f4"}},"buildTriggerId":"310e28d0-08f3-4ca0-b0c4-ed230c4baa38","options":{"substitutionOption":"ALLOW_LOOSE"},"logUrl":"https://console.cloud.google.com/gcr/builds/83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471?project=657212652564","tags":["event-303ee07b-8e3d-4e61-b3d1-3120c6905d72","trigger-310e28d0-08f3-4ca0-b0c4-ed230c4baa38"]}
-'''
+STATES = {
+    'WORKING': 'INPROGRESS',
+    'SUCCESS': 'SUCCESSFUL',
+    'FAILURE': 'FAILED',
+}
 
-msg_working = '''
-{"id":"83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471","projectId":"c4-order-management","status":"WORKING","source":{"repoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","branchName":"master"}},"steps":[{"name":"debian","args":["ls"]},{"name":"debian","args":["cal"]}],"createTime":"2018-08-09T11:21:12.597253221Z","startTime":"2018-08-09T11:21:13.893111478Z","timeout":"600s","logsBucket":"gs://657212652564.cloudbuild-logs.googleusercontent.com","sourceProvenance":{"resolvedRepoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","commitSha":"fb92e1d38809676b71a677dfef4d953e639106f4"}},"buildTriggerId":"310e28d0-08f3-4ca0-b0c4-ed230c4baa38","options":{"substitutionOption":"ALLOW_LOOSE"},"logUrl":"https://console.cloud.google.com/gcr/builds/83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471?project=657212652564","tags":["event-303ee07b-8e3d-4e61-b3d1-3120c6905d72","trigger-310e28d0-08f3-4ca0-b0c4-ed230c4baa38"]}
-'''
 
-msg_fail = '''
-{"id":"83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471","projectId":"c4-order-management","status":"FAILURE","source":{"repoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","branchName":"master"}},"steps":[{"name":"debian","args":["ls"],"timing":{"startTime":"2018-08-09T11:21:19.512566401Z","endTime":"2018-08-09T11:21:20.495784224Z"},"status":"SUCCESS"},{"name":"debian","args":["cal"],"timing":{"startTime":"2018-08-09T11:21:20.495800332Z","endTime":"2018-08-09T11:21:20.806879594Z"},"status":"FAILURE"}],"results":{"buildStepImages":["","sha256:a0cd2c88c5cc65499e959ac33c8ebab45f24e6348b48d8c34fd2308fcb0cc138"],"buildStepOutputs":[]},"createTime":"2018-08-09T11:21:12.597253221Z","startTime":"2018-08-09T11:21:13.893111478Z","finishTime":"2018-08-09T11:21:21.498455840Z","timeout":"600s","logsBucket":"gs://657212652564.cloudbuild-logs.googleusercontent.com","sourceProvenance":{"resolvedRepoSource":{"projectId":"c4-order-management","repoName":"github-raduciurlea-bbci","commitSha":"fb92e1d38809676b71a677dfef4d953e639106f4"}},"buildTriggerId":"310e28d0-08f3-4ca0-b0c4-ed230c4baa38","options":{"substitutionOption":"ALLOW_LOOSE"},"logUrl":"https://console.cloud.google.com/gcr/builds/83a6f7f6-aae8-4c9b-8fbf-9876aa7c4471?project=657212652564","tags":["event-303ee07b-8e3d-4e61-b3d1-3120c6905d72","trigger-310e28d0-08f3-4ca0-b0c4-ed230c4baa38"],"timing":{"BUILD":{"startTime":"2018-08-09T11:21:19.512547689Z","endTime":"2018-08-09T11:21:20.853589829Z"},"FETCHSOURCE":{"startTime":"2018-08-09T11:21:16.654064926Z","endTime":"2018-08-09T11:21:19.495646441Z"}}}
-'''
+def process(msg):
+    status = STATES.get(msg['status'])
+    if not status:
+        return
+    url = msg['logUrl']
+    commit = msg['sourceProvenance']['resolvedRepoSource']['commitSha']
+    steps = len(msg['steps'])
+    if status == 'INPROGRESS':
+        description = 'Build started ({} steps)'.format(steps)
+    else:
+        duration = (parse(msg['finishTime']) - parse(msg['startTime'])).seconds
+        if status == 'SUCCESSFUL':
+            description = 'Build succeeded in {}s ({} steps)'.format(duration, steps)
+        else:
+            description = 'Build failed in {}s ({} steps)'.format(duration, steps)
 
-# pprint(json.loads(msg_queued))
-# pprint(json.loads(msg_working))
-pprint(json.loads(msg_fail))
+    print(commit, url, description, status)
+
+
+def handle_pubsub(event, context):
+    """Triggered from a message on a Cloud Pub/Sub topic.
+    Args:
+         event (dict): Event payload.
+         context (google.cloud.functions.Context): Metadata for the event.
+    """
+    pubsub_message = json.loads(base64.b64decode(event['data']).decode('utf-8'))
+    process(pubsub_message)
